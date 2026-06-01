@@ -1,11 +1,11 @@
 ﻿<div align="center">
   <img src="icons/icon128.png" alt="Claude PDF Converter Logo" width="128" style="border-radius: 20px;"/>
   <h1>⚡ Claude PDF Converter</h1>
-  <p><strong>Transform PDFs into clean, token-efficient Markdown directly inside Claude.ai</strong></p>
+  <p><strong>A Local Client Application to Transform PDFs into clean, token-efficient Markdown directly inside Claude.ai</strong></p>
   <br/>
 </div>
 
-## 🚀 Why Use This Extension?
+## 🚀 Why Use This Local Application?
 
 When you upload a direct PDF to Claude, it processes it as a heavy binary document. This eats up your token limits fast and is less reliable for structured reasoning. 
 
@@ -33,9 +33,9 @@ No server. No API key. **No data ever leaves your machine.**
 
 ## 🛠️ How to Install
 
-> *Note: Currently undergoing Chrome Web Store review. You can easily install it manually in 30 seconds!*
+> *Note: By installing this browser application locally, you guarantee 100% data privacy. Easily install it manually in 30 seconds!*
 
-1. **Download the Extension:** Click the green <> Code button at the top of this repository and select **Download ZIP** (or clone the repo).
+1. **Download the Application:** Click the green `<> Code` button at the top of this repository and select **Download ZIP** (or clone the repo).
 2. **Extract:** Unzip the downloaded file to a folder on your computer.
 3. **Open Extensions:** Open Google Chrome and go to chrome://extensions/ in your URL bar.
 4. **Developer Mode:** Toggle **Developer mode** **ON** at the top right corner.
