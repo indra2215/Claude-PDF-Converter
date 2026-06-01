@@ -1,102 +1,73 @@
-﻿# ⚡ Claude PDF Converter
+﻿<div align="center">
+  <img src="icons/icon128.png" alt="Claude PDF Converter Logo" width="128" style="border-radius: 20px;"/>
+  <h1>⚡ Claude PDF Converter</h1>
+  <p><strong>Transform PDFs into clean, token-efficient Markdown directly inside Claude.ai</strong></p>
+  <br/>
+</div>
 
-> Paste or upload any PDF on [claude.ai](https://claude.ai) and instantly convert it to token-efficient Markdown — right in your browser. No server. No API key. No data leaves your machine.
+## 🚀 Why Use This Extension?
 
----
+When you upload a direct PDF to Claude, it processes it as a heavy binary document. This eats up your token limits fast and is less reliable for structured reasoning. 
 
-## Why This Exists
-
-When you upload a PDF directly to Claude, it is processed as a binary document — expensive in tokens and less reliable for structured reasoning. Plain Markdown is dramatically cheaper and cleaner:
+By converting it to plain Markdown locally *before* Claude reads it, you save massive amounts of limits!
 
 | Format | Tokens (typical 10-page doc) |
 |--------|-------------------------------|
-| PDF (uploaded) | ~8,000–15,000 |
-| Converted Markdown | ~2,000–5,000 |
-| **Savings** | **~50–75%** |
+| 🛑 **Raw PDF (uploaded)** | ~8,000–15,000 |
+| ✅ **Converted Markdown** | ~2,000–5,000 |
+| 📉 **Total Savings** | **~50–75% Tokens Saved** |
 
-Claude PDF Converter intercepts your PDF before it reaches Claude and converts it to Markdown in your browser using [pdf.js](https://github.com/mozilla/pdf.js) and [Tesseract.js](https://github.com/naptha/tesseract.js).
-
----
-
-## Features
-
-- **Text-based PDFs** — extracted instantly via pdf.js (no network call)
-- **Image/scanned PDFs** — auto-detected and OCR'd via Tesseract.js
-- **Mixed PDFs** — text pages use fast extraction; image pages use OCR
-- **Three trigger paths** — paste (Ctrl+V), file upload button, drag & drop
-- **Token estimate shown** before you insert
-- **Injects directly** into Claude's editor (preserves undo history)
-- **100% local** — Tesseract language data cached in browser after first use
+No server. No API key. **No data ever leaves your machine.**
 
 ---
 
-## Installation
+## ✨ Features
 
-> Install manually:
-
-1. Clone or download this repo \https://github.com/indra2215/Claude-PDF-Converter.git\
-2. Unzip it
-3. Open Chrome → go to \chrome://extensions/\
-4. Toggle **Developer mode** ON (top right)
-5. Click **Load unpacked** → select the folder
-6. Navigate to [claude.ai](https://claude.ai) — the extension is now active
+- 📑 **Instant Text Extraction** — Uses pdf.js for blazing-fast local processing.
+- 👁️ **Smart OCR Built-in** — Auto-detects scanned images and extracts text via Tesseract.js.
+- ⌨️ **Seamless Integration** — Triggers automatically when you paste (Ctrl+V), drag-and-drop, or click the upload button on Claude.ai.
+- 📊 **Token Estimation** — See the size of your document *before* you send it to Claude.
+- 🔒 **100% Private** — Everything happens in your browser. Zero network calls after initial OCR language model download.
 
 ---
 
-## How to Use
+## 🛠️ How to Install
 
-\\\
-1. On claude.ai, press Ctrl+V with a PDF in clipboard
-   OR click Claude's file upload button and select a PDF
-   OR drag and drop a PDF onto the page
+> *Note: Currently undergoing Chrome Web Store review. You can easily install it manually in 30 seconds!*
 
-2. A toast notification appears at the top center of the page
-
-3. Click "⚡ Convert to .md"
-   → Text PDFs: converts in <1 second
-   → Image/scanned PDFs: OCR runs (first use downloads ~4MB language model, cached after)
-
-4. Click "Insert into Claude" — Markdown is typed into the chat box
-
-5. Send your message as usual
-\\\
+1. **Download the Extension:** Click the green <> Code button at the top of this repository and select **Download ZIP** (or clone the repo).
+2. **Extract:** Unzip the downloaded file to a folder on your computer.
+3. **Open Extensions:** Open Google Chrome and go to chrome://extensions/ in your URL bar.
+4. **Developer Mode:** Toggle **Developer mode** **ON** at the top right corner.
+5. **Load Extension:** Click the **Load unpacked** button at the top left. Select the extracted Claude-PDF-Converter folder.
+6. **Done:** Navigate to [Claude.ai](https://claude.ai) and the extension is now active!
 
 ---
 
-## ⚠️ Accuracy Caveats — Read Before Using
+## 📖 How to Use
 
-This tool does its best, but has hard limits you must know:
-
-### Text-based PDFs
-- Works well for clean, single-column documents
-- **Tables** are flattened — PDF has no table semantics, so columns may merge incorrectly
-- **Multi-column layouts** (e.g. academic papers, newspapers) may have incorrect reading order
-- Mathematical formulas rendered as vector graphics are lost
-
-### Image-based / Scanned PDFs
-- OCR accuracy depends entirely on **scan quality and resolution**
-- Clean, high-contrast scans: good results
-- Low-quality scans, skewed pages, watermarks: degraded results
-- **Accuracy is not guaranteed — always verify output**
-
-### Handwritten PDFs
-- **Tesseract is not trained for handwriting**
-- Handwritten content will produce garbled or empty output
-
-### What to Do With Low-Confidence Output
-The extension shows a warning badge when output confidence is low. In those cases:
-- Use a dedicated OCR tool (Adobe Acrobat, ABBYY FineReader, Google Drive's OCR)
-- Or use Mathpix for math-heavy documents
+1. Open a chat on **[claude.ai](https://claude.ai)**.
+2. Select a PDF on your computer and press Ctrl+C, then go to Claude and press Ctrl+V (or simply drag and drop the PDF).
+3. A sleek drop-down notification will appear at the top center of your screen.
+4. Click **"⚡ Convert to .md"**.
+   - *Text PDFs convert in <1 second.*
+   - *Image/scanned PDFs will run OCR (first use downloads a ~4MB cache).*
+5. Click **"Insert into Claude"**. The lightweight Markdown is instantly typed into your chat!
 
 ---
 
-## Privacy
+## ⚠️ Accuracy & Limitations
 
-- **Zero network requests** for text-based PDFs
-- For image-based PDFs: Tesseract downloads \eng.traineddata\ (~4MB) from jsDelivr CDN on first use. This is the language model file. **No document content is ever sent anywhere.**
+- **Complex Layouts:** Tables and multi-column layouts (like academic papers) are flattened. Verify columns are merged correctly.
+- **Scanned Documents:** OCR quality heavily depends on the scan resolution.
+- **Handwriting:** The OCR engine (Tesseract) is not trained for handwritten notes.
 
 ---
 
-## License
+## 🛡️ Privacy & Tech Stack
 
-MIT — see [LICENSE](LICENSE)
+Built for Manifest V3. Your PDF never leaves your computer. The extension solely communicates with cdn.jsdelivr.net to cache the open-source OCR language models locally on first use. All PDF parsing is achieved via client-side JavaScript.
+
+<div align="center">
+  <i>Built to make AI more accessible and efficient.</i>
+</div>
