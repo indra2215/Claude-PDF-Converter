@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Claude PDF Converter",
+  "version": "1.1.0",
+  "description": "Paste or upload any PDF on Claude.ai and convert it to token-efficient Markdown instantly. Supports text PDFs and image/scanned PDFs via OCR.",
+  "permissions": ["clipboardRead", "clipboardWrite", "storage"],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://cdn.jsdelivr.net/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["lib/pdf.min.js", "lib/tesseract.min.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "lib/pdf.worker.min.js",
+        "lib/tesseract.worker.min.js"
+      ],
+      "matches": ["https://claude.ai/*"]
+    }
+  ]
+}
