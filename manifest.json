@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Claude PDF Converter",
-  "version": "1.2.0",
-  "description": "Paste or upload any PDF on Claude.ai and convert it to token-efficient Markdown instantly. Supports text PDFs and image/scanned PDFs via OCR.",
+  "name": "ISR-CONVERTER - Universal Document Converter",
+  "version": "2.1.0",
+  "description": "Convert PDFs, Word docs, images, CSV, JSON, XML, and HTML to Markdown on Claude.ai. Smart OCR with quality control. ISR-CONVERTER by Indra.",
   "permissions": ["clipboardRead", "clipboardWrite", "storage"],
   "host_permissions": [
     "https://claude.ai/*",
-    "https://cdn.jsdelivr.net/*"
+    "https://tessdata.projectnaptha.com/*"
   ],
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["lib/pdf.min.js", "lib/tesseract.min.js", "content.js"],
+      "js": ["lib/pdf.min.js", "lib/tesseract.min.js", "lib/mammoth.min.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }

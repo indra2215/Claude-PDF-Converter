@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Claude PDF Converter</title>
+  <title>ISR-CONVERTER</title>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -195,11 +195,40 @@
     <div class="logo-row">
       <div class="logo">⚡</div>
       <div>
-        <h1>Claude <span>PDF Converter</span></h1>
-        <div class="tagline">PDF → Markdown for Claude</div>
+        <h1>ISR-<span>CONVERTER</span></h1>
+        <div class="tagline">Multi-format → Markdown for Claude</div>
       </div>
     </div>
     <div class="pill"><div class="dot"></div> Active on claude.ai</div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Supported Formats</div>
+    
+    <div class="how-item">
+      <div class="how-num">📄</div>
+      <div class="how-text"><b>PDF</b> — Text extraction + OCR for scanned docs</div>
+    </div>
+    <div class="how-item">
+      <div class="how-num">📝</div>
+      <div class="how-text"><b>Word</b> — .docx files to clean Markdown</div>
+    </div>
+    <div class="how-item">
+      <div class="how-num">🖼️</div>
+      <div class="how-text"><b>Images</b> — JPEG, PNG, GIF, WebP (EXIF + OCR)</div>
+    </div>
+    <div class="how-item">
+      <div class="how-num">📊</div>
+      <div class="how-text"><b>CSV</b> — Full data tables (no limits!)</div>
+    </div>
+    <div class="how-item">
+      <div class="how-num">{ }</div>
+      <div class="how-text"><b>JSON</b> — Formatted code + auto-table generation</div>
+    </div>
+    <div class="how-item">
+      <div class="how-num">&lt;/&gt;</div>
+      <div class="how-text"><b>XML & HTML</b> — Clean content extraction</div>
+    </div>
   </div>
 
   <div class="section">
@@ -207,7 +236,7 @@
 
     <div class="how-item">
       <div class="how-num">1</div>
-      <div class="how-text"><b>Paste</b> a PDF (Ctrl+V) or <b>upload</b> via Claude's file button</div>
+      <div class="how-text"><b>Paste</b> (Ctrl+V), <b>drag & drop</b>, or <b>upload</b> any supported file on Claude.ai</div>
     </div>
     <div class="how-item">
       <div class="how-num">2</div>
@@ -215,26 +244,22 @@
     </div>
     <div class="how-item">
       <div class="how-num">3</div>
-      <div class="how-text">Click <b>"Attach .md to Claude"</b> — Markdown is attached as a <code>.md</code> file to your chat</div>
-    </div>
-    <div class="how-item">
-      <div class="how-num">4</div>
-      <div class="how-text">Image PDFs are <b>auto-detected</b> and OCR'd via Tesseract</div>
+      <div class="how-text">Click <b>"Attach .md to Claude"</b> — the file is attached to your chat</div>
     </div>
   </div>
 
   <div class="warn-box">
-    <div class="warn-title">⚠ Accuracy Caveats</div>
+    <div class="warn-title">⚠ Accuracy Notes</div>
     <div class="warn-body">
-      <div class="warn-row">Image-based / scanned PDFs: OCR accuracy varies by scan quality</div>
-      <div class="warn-row">Handwritten text: <b>unreliable</b> — Tesseract is not trained for handwriting</div>
-      <div class="warn-row">Tables & complex layouts may flatten or merge incorrectly</div>
-      <div class="warn-row">Always verify converted content before relying on it</div>
+      <div class="warn-row"><b>OCR content</b>: Accuracy varies by image/scan quality</div>
+      <div class="warn-row"><b>Handwritten text</b>: Not reliable (Tesseract is print-trained)</div>
+      <div class="warn-row"><b>Complex layouts</b>: Tables may flatten or merge</div>
+      <div class="warn-row">Always verify converted content for critical use</div>
     </div>
   </div>
 
   <div class="footer">
-    <div class="footer-left">🔒 All processing is local · No data sent anywhere</div>
+    <div class="footer-left">🔒 100% local · Created by Indra</div>
   </div>
 
 </body>
