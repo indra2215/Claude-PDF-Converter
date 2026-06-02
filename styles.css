@@ -1,10 +1,9 @@
-﻿/* Claude PDF Converter — Injected Styles for claude.ai */
+/* Claude PDF Converter — Injected Styles for claude.ai */
 
 .mpdf-toast {
   position: fixed;
-  top: 40px;
+  bottom: 100px;
   left: 50%;
-  transform: translateX(-50%) translateY(-14px) scale(0.97);
   z-index: 2147483647;
   display: flex;
   align-items: center;
@@ -23,7 +22,7 @@
   font-size: 13px;
   color: #333333;
   opacity: 0;
-  transform: translateY(14px) scale(0.97);
+  transform: translateX(-50%) translateY(14px) scale(0.97);
   transition:
     opacity 0.22s ease,
     transform 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
@@ -38,7 +37,7 @@
 
 .mpdf-toast.mpdf-exit {
   opacity: 0;
-  transform: translateX(-50%) translateY(-10px) scale(0.97);
+  transform: translateX(-50%) translateY(10px) scale(0.97);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 

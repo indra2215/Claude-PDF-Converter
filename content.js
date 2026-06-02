@@ -30,16 +30,32 @@
   // ─── State ────────────────────────────────────────────────────────────────────
   let activeToast = null;
   let tesseractWorker = null;
+  let workerIdleTimer = null;
+  let isInjectingFile = false; // flag to bypass our own event interceptors during .md injection
+  let pdfQueue = [];
+  let isProcessingQueue = false;
 
-  // ─── Tesseract worker (lazy init) ─────────────────────────────────────────────
+  // ─── Tesseract worker (lazy init, auto-cleanup after 60s idle) ────────────────
+  function scheduleWorkerCleanup() {
+    clearTimeout(workerIdleTimer);
+    workerIdleTimer = setTimeout(async () => {
+      if (tesseractWorker) {
+        await tesseractWorker.terminate();
+        tesseractWorker = null;
+        console.log("[MarkPDF] Tesseract worker terminated (idle timeout)");
+      }
+    }, 60000);
+  }
+
   async function getTesseractWorker() {
+    clearTimeout(workerIdleTimer);
     if (tesseractWorker) return tesseractWorker;
 
     // Tesseract.js 5.x createWorker API
     tesseractWorker = await Tesseract.createWorker(TESSERACT_LANGS, 1, {
       workerPath: chrome.runtime.getURL("lib/tesseract.worker.min.js"),
       // Language data is downloaded from CDN on first use (~4MB, cached by browser)
-      langPath: "https://cdn.jsdelivr.net/npm/tesseract.js-data@4.0.0/traineddata/best",
+      langPath: "https://tessdata.projectnaptha.com/4.0.0",
       cacheMethod: "write",
       logger: (m) => {
         if (m.status === "recognizing text") {
@@ -213,6 +229,9 @@
     const body = results.map((r) => r.text).join("\n\n");
     const fullMd = `${header}\n${body}`.replace(/\n{3,}/g, "\n\n").trim();
 
+    // Clean up OCR worker after idle period to free memory
+    if (ocrPageCount > 0) scheduleWorkerCleanup();
+
     return {
       markdown: fullMd,
       stats: {
@@ -224,38 +243,116 @@
     };
   }
 
-  // ─── Inject into Claude's editor ─────────────────────────────────────────────
-  function injectIntoClaudeEditor(mdText, fileName) {
+  // ─── Inject .md file into Claude ────────────────────────────────────────────────
+  function findClaudeEditor() {
     const selectors = [
       'div[contenteditable="true"].ProseMirror',
       '[data-testid="composer-input"]',
       'div[contenteditable="true"][role="textbox"]',
       'div[contenteditable="true"]',
     ];
-
-    let editor = null;
     for (const sel of selectors) {
-      editor = document.querySelector(sel);
-      if (editor) break;
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function injectMarkdownFile(mdText, fileName) {
+    const mdFileName = fileName.replace(/\.pdf$/i, ".md");
+    const file = new File([mdText], mdFileName, {
+      type: "text/markdown",
+      lastModified: Date.now(),
+    });
+
+    // Method 1: Use Claude's file input directly (only reliable way)
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    let injected = false;
+    
+    for (const input of fileInputs) {
+      try {
+        const dt = new DataTransfer();
+        // Preserve existing files in the input list
+        if (input.files && input.files.length) {
+          for (let i = 0; i < input.files.length; i++) {
+            if (input.files[i].name !== mdFileName) {
+              dt.items.add(input.files[i]);
+            }
+          }
+        }
+        dt.items.add(file);
+        isInjectingFile = true;
+        input.files = dt.files;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        isInjectingFile = false;
+        injected = true;
+      } catch (err) {
+        isInjectingFile = false;
+        continue;
+      }
     }
 
-    const label = `*[Converted from: ${fileName.replace(/\.pdf$/i, "")}]*\n\n`;
-    const fullText = label + mdText;
+    if (injected) {
+      showSimpleToast(`\u2705 ${esc(mdFileName)} attached to Claude`);
+      return;
+    }
 
+    // Fallback: insert as text in editor
+    const editor = findClaudeEditor();
     if (editor) {
       editor.focus();
+      const label = `*[Converted from: ${fileName.replace(/\.pdf$/i, "")}]*\n\n`;
+      const fullText = label + mdText;
       const inserted = document.execCommand("insertText", false, fullText);
       if (!inserted) {
-        // Fallback for browsers where execCommand is disabled
         editor.innerText = fullText;
         editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
       }
-    } else {
-      // Ultimate fallback: clipboard
-      navigator.clipboard.writeText(fullText).then(() => {
-        showSimpleToast("📋 Copied to clipboard — paste with Ctrl+V");
-      });
+      showSimpleToast("\u270D Inserted as text (file attach unavailable)");
+      return;
     }
+
+    // Ultimate fallback: clipboard
+    navigator.clipboard.writeText(mdText).then(() => {
+      showSimpleToast("\uD83D\uDCCB Copied to clipboard \u2014 paste with Ctrl+V");
+    });
+  }
+
+  function injectRawPdfFile(file) {
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    let injected = false;
+    
+    for (const input of fileInputs) {
+      try {
+        const dt = new DataTransfer();
+        // Preserve existing files in the input list
+        if (input.files && input.files.length) {
+          for (let i = 0; i < input.files.length; i++) {
+            if (input.files[i].name !== file.name) {
+              dt.items.add(input.files[i]);
+            }
+          }
+        }
+        dt.items.add(file);
+        isInjectingFile = true;
+        input.files = dt.files;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        isInjectingFile = false;
+        injected = true;
+      } catch (err) {
+        isInjectingFile = false;
+        continue;
+      }
+    }
+
+    if (injected) {
+      showSimpleToast(`\u2705 Original PDF attached: ${esc(file.name)}`);
+      return;
+    }
+
+    showSimpleToast("\u26A0 Could not attach raw PDF");
   }
 
   // ─── UI: Toast system ────────────────────────────────────────────────────────
@@ -272,9 +369,15 @@
     removeToast();
     const el = document.createElement("div");
     el.className = "mpdf-toast";
+    el.setAttribute("role", "alert");
+    el.setAttribute("aria-live", "polite");
     el.innerHTML = html;
     document.body.appendChild(el);
     activeToast = el;
+
+    // Position toast just above Claude's input area
+    positionToastAboveInput(el);
+
     requestAnimationFrame(() => {
       requestAnimationFrame(() => el.classList.add("mpdf-visible"));
     });
@@ -282,7 +385,21 @@
     return el;
   }
 
+  function positionToastAboveInput(toast) {
+    const editor = findClaudeEditor();
+    if (editor) {
+      // Find the nearest container parent (the composer wrapper)
+      const composerArea = editor.closest('[class*="composer"]')
+        || editor.closest('[class*="input"]')
+        || editor.parentElement;
+      const rect = (composerArea || editor).getBoundingClientRect();
+      const bottomOffset = window.innerHeight - rect.top + 12;
+      toast.style.bottom = `${Math.max(bottomOffset, 80)}px`;
+    }
+  }
+
   function showDetectedToast(fileName, size, onConvert) {
+    const queueInfo = pdfQueue.length > 1 ? ` · File 1 of ${pdfQueue.length}` : "";
     const toast = makeToast(`
       <div class="mpdf-icon mpdf-icon-pdf">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -292,14 +409,22 @@
       </div>
       <div class="mpdf-body">
         <div class="mpdf-title">${esc(fileName)}</div>
-        <div class="mpdf-sub">${fmtBytes(size)} · PDF detected</div>
+        <div class="mpdf-sub">${fmtBytes(size)}${queueInfo} · PDF detected</div>
       </div>
       <button class="mpdf-btn mpdf-btn-primary" id="mpdf-convert">⚡ Convert to .md</button>
       <button class="mpdf-btn mpdf-btn-ghost" id="mpdf-skip">✕</button>
-    `, 14000);
+    `, 0);
 
-    toast.querySelector("#mpdf-convert").onclick = () => { removeToast(); onConvert(); };
-    toast.querySelector("#mpdf-skip").onclick = removeToast;
+    toast.querySelector("#mpdf-convert").onclick = () => { onConvert(); };
+    toast.querySelector("#mpdf-skip").onclick = () => {
+      const originalFile = pdfQueue[0];
+      if (originalFile) {
+        injectRawPdfFile(originalFile);
+      }
+      pdfQueue.shift();
+      removeToast();
+      processNextInQueue();
+    };
   }
 
   function showProcessingToast(fileName, info) {
@@ -323,8 +448,10 @@
   }
 
   function showDoneToast(fileName, stats, mdText) {
-    const savedPct = mdText.length < 5000 ? null :
-      Math.max(0, Math.round((1 - (new TextEncoder().encode(mdText).length / (mdText.length * 2))) * 100));
+    const mdTokens = Math.round(mdText.length / 4);
+    // Rough estimate: Claude charges ~1500 tokens per raw PDF page via vision vs pure text
+    const pdfTokensEstimate = stats.totalPages * 1500; 
+    const tokensSaved = Math.max(0, pdfTokensEstimate - mdTokens);
 
     const ocrNote = stats.ocrPages > 0
       ? `<span class="mpdf-badge mpdf-badge-warn">OCR: ${stats.ocrPages}p</span>` : "";
@@ -340,23 +467,31 @@
       <div class="mpdf-body">
         <div class="mpdf-title">${esc(fileName.replace(/\.pdf$/i, ".md"))}</div>
         <div class="mpdf-sub">
-          ${stats.totalPages}p · ~${Math.round(mdText.length / 4).toLocaleString()} tokens
+          ${stats.totalPages}p · ~${mdTokens.toLocaleString()} tokens (Saved ~${tokensSaved.toLocaleString()})
           ${ocrNote}${lowNote}
         </div>
       </div>
-      <button class="mpdf-btn mpdf-btn-primary" id="mpdf-insert">Insert into Claude</button>
+      <button class="mpdf-btn mpdf-btn-primary" id="mpdf-insert">📎 Attach .md to Claude</button>
       <button class="mpdf-btn mpdf-btn-ghost" id="mpdf-done-close">✕</button>
-    `);
+    `, 0);
 
     toast.querySelector("#mpdf-insert").onclick = () => {
-      injectIntoClaudeEditor(mdText, fileName);
-      removeToast();
+      removeToast(); // Remove this toast FIRST, so we don't accidentally remove the success toast
+      injectMarkdownFile(mdText, fileName);
+      
+      pdfQueue.shift();
+      setTimeout(processNextInQueue, 1500);
     };
-    toast.querySelector("#mpdf-done-close").onclick = removeToast;
+    
+    toast.querySelector("#mpdf-done-close").onclick = () => {
+      pdfQueue.shift();
+      removeToast();
+      processNextInQueue();
+    };
   }
 
-  function showErrorToast(message) {
-    makeToast(`
+  function showErrorToast(message, onClose) {
+    const toast = makeToast(`
       <div class="mpdf-icon mpdf-icon-error">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <circle cx="12" cy="12" r="10"/>
@@ -369,17 +504,35 @@
         <div class="mpdf-sub">${esc(message)}</div>
       </div>
       <button class="mpdf-btn mpdf-btn-ghost" id="mpdf-err-close">✕</button>
-    `, 7000);
-    document.getElementById("mpdf-err-close")?.addEventListener("click", removeToast);
+    `, 6000);
+    
+    const closeBtn = toast.querySelector("#mpdf-err-close");
+    let closed = false;
+    
+    const handleClose = () => {
+      if (closed) return;
+      closed = true;
+      removeToast();
+      if (onClose) onClose();
+    };
+
+    if (closeBtn) closeBtn.onclick = handleClose;
+    setTimeout(handleClose, 6000);
   }
 
   function showSimpleToast(msg) {
     makeToast(`<div class="mpdf-body"><div class="mpdf-title">${esc(msg)}</div></div>`, 4000);
   }
 
-  // ─── Main handler ─────────────────────────────────────────────────────────────
-  async function handlePdf(file) {
-    if (!file || file.type !== "application/pdf") return false;
+  // ─── Main Queue Handler ────────────────────────────────────────────────────────
+  async function processNextInQueue() {
+    if (pdfQueue.length === 0) {
+      isProcessingQueue = false;
+      return;
+    }
+
+    isProcessingQueue = true;
+    const file = pdfQueue[0];
     const { name: fileName, size } = file;
 
     showDetectedToast(fileName, size, async () => {
@@ -408,9 +561,35 @@
           : err.message?.includes("Invalid PDF")
           ? "File does not appear to be a valid PDF"
           : err.message || "Unexpected error";
-        showErrorToast(msg);
+          
+        showErrorToast(msg, () => {
+          pdfQueue.shift();
+          processNextInQueue();
+        });
       }
     });
+  }
+
+  function updateQueueInfoInToast() {
+    if (!activeToast) return;
+    const subEl = activeToast.querySelector(".mpdf-sub");
+    if (subEl && pdfQueue.length > 0) {
+      const file = pdfQueue[0];
+      const queueInfo = pdfQueue.length > 1 ? ` · File 1 of ${pdfQueue.length}` : "";
+      subEl.innerHTML = `${fmtBytes(file.size)}${queueInfo} · PDF detected`;
+    }
+  }
+
+  async function handlePdf(file) {
+    if (!file || file.type !== "application/pdf") return false;
+    
+    pdfQueue.push(file);
+
+    if (pdfQueue.length === 1 && !isProcessingQueue) {
+      processNextInQueue();
+    } else {
+      updateQueueInfoInToast();
+    }
 
     return true;
   }
@@ -419,12 +598,15 @@
 
   // Paste
   document.addEventListener("paste", async (e) => {
+    let intercepted = false;
     for (const item of Array.from(e.clipboardData?.items || [])) {
       if (item.kind === "file" && item.type === "application/pdf") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        if (!intercepted) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          intercepted = true;
+        }
         await handlePdf(item.getAsFile());
-        return;
       }
     }
   }, { capture: true }); // Intercept early before Claude handles paste
@@ -434,18 +616,18 @@
     if (input.__mpdfPatched) return;
     input.__mpdfPatched = true;
     input.addEventListener("change", async (e) => {
-      let hasPdf = false;
-      for (const f of Array.from(e.target.files || [])) {
-        if (f.type === "application/pdf") {
-          hasPdf = true;
-          await handlePdf(f);
-        }
-      }
-      
-      if (hasPdf) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        input.value = ""; // Clear file input so Claude doesn't read it
+      if (isInjectingFile) return; // Skip during our own .md injection
+      const files = Array.from(e.target.files || []);
+      const pdfFiles = files.filter(f => f.type === "application/pdf");
+      if (pdfFiles.length === 0) return;
+
+      // Prevent synchronously before any async work
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      input.value = ""; // Clear file input so Claude doesn't read it
+
+      for (const file of pdfFiles) {
+        await handlePdf(file);
       }
     }, { capture: true });
   }
@@ -464,26 +646,24 @@
 
   // Drag & drop
   document.addEventListener("drop", async (e) => {
-    let hasPdf = false;
-    for (const f of Array.from(e.dataTransfer?.files || [])) {
-      if (f.type === "application/pdf") {
-        hasPdf = true;
-        await handlePdf(f);
-      }
-    }
+    if (isInjectingFile) return; // Skip during our own .md injection
+    const files = Array.from(e.dataTransfer?.files || []);
+    const pdfFiles = files.filter(f => f.type === "application/pdf");
+    if (pdfFiles.length === 0) return;
 
-    if (hasPdf) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
+    // Prevent synchronously before any async work
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    for (const file of pdfFiles) {
+      await handlePdf(file);
     }
   }, { capture: true });
 
   // Prevent default dragover to allow drop
   document.addEventListener("dragover", (e) => {
     if (e.dataTransfer?.types?.includes("Files")) {
-      // Need to find if it's a PDF, wait we can't inspect files during dragover easily.
-      // Easiest is just to let it pass but stop it if we want to drop it.
-      // Usually stopPropagation on drop is enough.
+      e.preventDefault(); // Required to allow custom drop handling
     }
   }, { capture: true });
 
@@ -491,7 +671,8 @@
   function esc(s) {
     return String(s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function fmtBytes(b) {
