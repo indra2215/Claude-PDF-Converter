@@ -12,6 +12,12 @@
 (function () {
   "use strict";
 
+  // ─── SPA Re-injection Guard ───────────────────────────────────────────────────
+  // Claude.ai is a SPA; on navigation the content script may be re-injected,
+  // which would add duplicate event listeners. This guard prevents that.
+  if (window.__mpdfLoaded) return;
+  window.__mpdfLoaded = true;
+
   // ─── Sanity checks ────────────────────────────────────────────────────────────
   if (typeof pdfjsLib === "undefined") {
     console.error("[MarkPDF] pdf.js not loaded. Extension may be broken.");
@@ -23,7 +29,7 @@
   );
 
   // ─── Constants ────────────────────────────────────────────────────────────────
-  const MIN_CHARS_PER_PAGE = 80; // below this → treat page as image-based
+  const MIN_CHARS_PER_PAGE = 30; // below this → treat page as image-based (lowered from 80 to avoid unnecessary OCR on sparse-but-valid pages like chapter titles)
   const OCR_SCALE = 2.0;         // render scale for OCR (higher = better accuracy, slower)
   const TESSERACT_LANGS = "eng"; // change to "eng+hin" for Hindi etc.
 
@@ -116,9 +122,10 @@
       const isAllCaps = t === t.toUpperCase() && /[A-Z]{2,}/.test(t);
       const titleRatio = words.filter((w) => /^[A-Z]/.test(w)).length / wc;
 
-      if (wc <= 10 && noEndPunct) {
-        if (isAllCaps && wc <= 6) return `## ${t}`;
-        if (titleRatio > 0.65 && wc <= 7) return `### ${t}`;
+      // Tightened thresholds to avoid promoting normal sentences to headings
+      if (wc <= 8 && noEndPunct) {
+        if (isAllCaps && wc <= 4) return `## ${t}`;
+        if (titleRatio > 0.8 && wc <= 5) return `### ${t}`;
       }
 
       // Bullet symbols
@@ -281,14 +288,19 @@
           }
         }
         dt.items.add(file);
+        // Bug fix: use try/finally so isInjectingFile is always reset,
+        // even if dispatchEvent throws unexpectedly
         isInjectingFile = true;
-        input.files = dt.files;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        isInjectingFile = false;
-        injected = true;
+        try {
+          input.files = dt.files;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          injected = true;
+        } finally {
+          isInjectingFile = false;
+        }
+        break; // Bug fix: stop after first successful injection — prevents duplicate uploads to multiple file inputs
       } catch (err) {
-        isInjectingFile = false;
         continue;
       }
     }
@@ -304,7 +316,19 @@
       editor.focus();
       const label = `*[Converted from: ${fileName.replace(/\.pdf$/i, "")}]*\n\n`;
       const fullText = label + mdText;
-      const inserted = document.execCommand("insertText", false, fullText);
+      // Use Selection API (document.execCommand is deprecated in modern browsers)
+      let inserted = false;
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        try {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(fullText));
+          range.collapse(false);
+          editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+          inserted = true;
+        } catch (_) { /* fall through to innerText fallback */ }
+      }
       if (!inserted) {
         editor.innerText = fullText;
         editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
@@ -336,13 +360,16 @@
         }
         dt.items.add(file);
         isInjectingFile = true;
-        input.files = dt.files;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        isInjectingFile = false;
-        injected = true;
+        try {
+          input.files = dt.files;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          injected = true;
+        } finally {
+          isInjectingFile = false;
+        }
+        break; // Bug fix: stop after first successful injection — prevents duplicate uploads
       } catch (err) {
-        isInjectingFile = false;
         continue;
       }
     }
@@ -504,7 +531,7 @@
         <div class="mpdf-sub">${esc(message)}</div>
       </div>
       <button class="mpdf-btn mpdf-btn-ghost" id="mpdf-err-close">✕</button>
-    `, 6000);
+    `, 0); // Bug fix: pass 0 — let handleClose own all close logic (avoids duplicate timer that skips onClose callback)
     
     const closeBtn = toast.querySelector("#mpdf-err-close");
     let closed = false;
@@ -580,7 +607,7 @@
     }
   }
 
-  async function handlePdf(file) {
+  function handlePdf(file) { // Bug fix: remove spurious async — no await inside; processNextInQueue is intentionally fire-and-forget
     if (!file || file.type !== "application/pdf") return false;
     
     pdfQueue.push(file);
@@ -597,7 +624,7 @@
   // ─── Event hooks ─────────────────────────────────────────────────────────────
 
   // Paste
-  document.addEventListener("paste", async (e) => {
+  document.addEventListener("paste", (e) => {
     let intercepted = false;
     for (const item of Array.from(e.clipboardData?.items || [])) {
       if (item.kind === "file" && item.type === "application/pdf") {
@@ -606,7 +633,7 @@
           e.stopImmediatePropagation();
           intercepted = true;
         }
-        await handlePdf(item.getAsFile());
+        handlePdf(item.getAsFile());
       }
     }
   }, { capture: true }); // Intercept early before Claude handles paste
@@ -615,7 +642,7 @@
   function patchFileInput(input) {
     if (input.__mpdfPatched) return;
     input.__mpdfPatched = true;
-    input.addEventListener("change", async (e) => {
+    input.addEventListener("change", (e) => {
       if (isInjectingFile) return; // Skip during our own .md injection
       const files = Array.from(e.target.files || []);
       const pdfFiles = files.filter(f => f.type === "application/pdf");
@@ -627,7 +654,7 @@
       input.value = ""; // Clear file input so Claude doesn't read it
 
       for (const file of pdfFiles) {
-        await handlePdf(file);
+        handlePdf(file);
       }
     }, { capture: true });
   }
@@ -645,7 +672,7 @@
   }).observe(document.body, { childList: true, subtree: true });
 
   // Drag & drop
-  document.addEventListener("drop", async (e) => {
+  document.addEventListener("drop", (e) => {
     if (isInjectingFile) return; // Skip during our own .md injection
     const files = Array.from(e.dataTransfer?.files || []);
     const pdfFiles = files.filter(f => f.type === "application/pdf");
@@ -656,7 +683,7 @@
     e.stopImmediatePropagation();
 
     for (const file of pdfFiles) {
-      await handlePdf(file);
+      handlePdf(file);
     }
   }, { capture: true });
 
@@ -666,6 +693,12 @@
       e.preventDefault(); // Required to allow custom drop handling
     }
   }, { capture: true });
+
+  // Bug fix: reposition active toast whenever the window resizes
+  // (Claude's composer area can shift position on resize/layout changes)
+  window.addEventListener("resize", () => {
+    if (activeToast) positionToastAboveInput(activeToast);
+  });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
   function esc(s) {
